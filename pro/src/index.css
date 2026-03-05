@@ -1,0 +1,47 @@
+:root {
+  --bg-color: #f9fafb;
+  --text-color: #111827;
+  --card-bg: #ffffff;
+  --border-color: #d1d5db;
+  --accent: #06b6d4;
+}
+
+.dark-theme {
+  --bg-color: #0f172a;
+  --text-color: #e2e8f0;
+  --card-bg: #1e293b;
+  --border-color: #334155;
+  --accent: #22d3ee;
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  transition: background-color 0.3s, color 0.3s;
+}
+:root {
+  /* Light theme (default) */
+  --bg-color: #f9fafb;         /* page background */
+  --text-color: #111827;       /* primary text */
+  --card-bg: #ffffff;          /* card containers */
+  --border-color: #d1d5db;     /* subtle borders */
+  --accent: #06b6d4;           /* cyan accent */
+}
+
+.dark-theme {
+  /* Dark theme */
+  --bg-color: #0f172a;
+  --text-color: #e2e8f0;
+  --card-bg: #1e293b;
+  --border-color: #334155;
+  --accent: #22d3ee;
+}
+
+/* Global application of variables (doesn't change your layout) */
+html, body, #root {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  transition: background-color .25s ease, color .25s ease;
+}
+
+@import "tailwindcss"
