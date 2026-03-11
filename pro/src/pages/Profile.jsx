@@ -410,16 +410,7 @@ export default function Profile() {
                   Edit
                 </button>
               )}
-
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="flex items-center px-4 py-2 bg-slate-700 text-gray-100 font-bold rounded-lg shadow hover:bg-slate-600 transition-all"
-                title="Logout"
-              >
-                <LogOut className="w-5 h-5 mr-2" />
-                Logout
-              </button>
+              
             </div>
           </div>
 

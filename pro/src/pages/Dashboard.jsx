@@ -23,7 +23,7 @@ import AccountBanner from "../components/AccountBanner";
 import { useAuthGuard } from "../hooks/useAuthguard";
 
 const API_BASE_URL =
-  import.meta?.env?.VITE_API_BASE_URL || "http://localhost:5000";
+  import.meta?.env?.VITE_API_BASE_URL || "http://localhost:5001";
 
 const Navbar = () => (
   <nav className="bg-slate-800 p-4 rounded-lg mb-8 border border-gray-700 shadow-md">

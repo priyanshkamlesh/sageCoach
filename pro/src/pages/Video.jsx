@@ -51,7 +51,7 @@ export default function ShortsPlayer() {
   
   // --- IMPORTANT ---
   // Add your YouTube Data API Key here.
-  const YOUTUBE_API_KEY = "AIzaSyAX-8OzXjz5T8oCLxwcXle2LLfmqkrTx7Y"; // <--- PASTE YOUR API KEY HERE
+  const YOUTUBE_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY; // <--- PASTE YOUR API KEY HERE
 
   /**
    * Fetches videos from YouTube API based on current query and sort order.
