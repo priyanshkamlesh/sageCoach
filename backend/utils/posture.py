@@ -145,6 +145,17 @@ def analyze_posture_image(image_bgr: np.ndarray):
             "tip": "Great posture! Maintain this alignment."
         })
 
+    # Map posture issues to affected endpoints (joints)
+    problematic_joints = set()
+    if issues["spine"]:
+        problematic_joints.update(["nose", "l_sh", "r_sh", "l_hip", "r_hip"])
+    if issues["shoulders"]:
+        problematic_joints.update(["l_sh", "r_sh"])
+    if issues["hips"]:
+        problematic_joints.update(["l_hip", "r_hip"])
+    if issues["head"]:
+        problematic_joints.update(["nose"])
+
     # ---------------------------
     # skeleton drawing
     # ---------------------------
@@ -196,19 +207,21 @@ def analyze_posture_image(image_bgr: np.ndarray):
         ("nose", "r_sh"),
     ]
 
-    def draw_line(p1, p2, color, width=4):
+    def draw_line(p1, p2, color, width=7):
         draw.line((p1[0], p1[1], p2[0], p2[1]), fill=color, width=width)
 
-    def draw_point(p, color, r=4):
+    def draw_point(p, color, r=6):
         x, y = p
         draw.ellipse((x-r, y-r, x+r, y+r), fill=color)
 
     # draw skeleton
     for a, b in segments:
-        draw_line(joints[a], joints[b], (0, 255, 0))
+        line_color = (255, 64, 64) if (a in problematic_joints or b in problematic_joints) else (0, 255, 0)
+        draw_line(joints[a], joints[b], line_color)
 
-    for p in joints.values():
-        draw_point(p, (0, 255, 0))
+    for name, p in joints.items():
+        point_color = (255, 64, 64) if name in problematic_joints else (0, 255, 0)
+        draw_point(p, point_color)
 
     # ---------------------------
     # ideal skeleton
@@ -238,16 +251,20 @@ def analyze_posture_image(image_bgr: np.ndarray):
         draw2.line(
             (ideal[a][0], ideal[a][1], ideal[b][0], ideal[b][1]),
             fill=(0,255,0),
-            width=4
+            width=7
         )
 
     for p in ideal.values():
         x,y = p
-        draw2.ellipse((x-4,y-4,x+4,y+4), fill=(0,255,0))
+        draw2.ellipse((x-6,y-6,x+6,y+6), fill=(0,255,0))
 
     return {
         "score": float(score),
         "feedback": feedback,
+        "joint_status": {
+            name: ("incorrect" if name in problematic_joints else "correct")
+            for name in joints.keys()
+        },
         "annotated_b64": pil_to_base64(ann_img),
         "ideal_b64": pil_to_base64(ideal_img),
     }

@@ -32,6 +32,7 @@ def api_analyze():
             "ok": True,
             "posture_score": result["score"],
             "feedback": result["feedback"],
+            "joint_status": result.get("joint_status", {}),
             "annotated_image_base64": result["annotated_b64"],
             "corrected_skeleton_image_base64": result["ideal_b64"]
         })

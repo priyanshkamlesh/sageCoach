@@ -1,23 +1,41 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { API_BASE_URL } from '../config';
 
-// --- (NEW) Placeholder Navbar Component ---
+let rateLimitUntil = 0;
+const VIRTUAL_COACH_ENDPOINT = `${API_BASE_URL}/virtual_coach/chat`;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const parseRetryAfterMs = (headerValue) => {
+  if (!headerValue) return null;
+
+  const seconds = Number(headerValue);
+  if (!Number.isNaN(seconds)) {
+    return Math.max(0, seconds * 1000);
+  }
+
+  const dateMs = Date.parse(headerValue);
+  if (Number.isNaN(dateMs)) return null;
+
+  return Math.max(0, dateMs - Date.now());
+};
+
 const Navbar = () => {
-  return (
-    <nav className="bg-slate-800 p-4 rounded-lg mb-8 border border-gray-700 shadow-md">
-      <div className="max-w-6xl mx-auto flex justify-between items-center">
-        <a href="#/" className="flex items-center gap-3 group">
-          <svg 
-            xmlns="http://www.w3.org/2000/svg" 
-            viewBox="0 0 24 24" 
-            fill="none" 
-            stroke="currentColor" 
-            strokeWidth="2" 
-            strokeLinecap="round" 
-            strokeLinejoin="round" 
-            className="w-8 h-8 text-cyan-400 group-hover:scale-110 transition-transform"
-          >
-            {/* Using a simple bot icon path */}
-            <path d="M12 8V4H8" />
+  return (
+    <nav className="bg-slate-800 p-4 rounded-lg mb-8 border border-gray-700 shadow-md">
+      <div className="max-w-6xl mx-auto flex justify-between items-center">
+        <a href="#/" className="flex items-center gap-3 group">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="w-8 h-8 text-cyan-400 group-hover:scale-110 transition-transform"
+          >
+            <path d="M12 8V4H8" />
             <path d="M16 4h-4" />
             <path d="M12 16h2a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h2" />
             <path d="M12 16v4" />
@@ -25,63 +43,43 @@ const Navbar = () => {
             <path d="M16 16v4" />
             <path d="M10 12h.01" />
             <path d="M14 12h.01" />
-          </svg>
-          {/* --- (MODIFIED) Title changed --- */}
-          <span className="text-xl font-bold text-white group-hover:text-cyan-300 transition-colors">Virtual Coach</span>
-        </a>
-        <div className="flex items-center gap-4">
-          <a href="home" className="text-gray-300 hover:text-cyan-400 transition-colors">Home</a>
-          <a href="dashboard" className="text-gray-300 hover:text-cyan-400 transition-colors">Dashboard</a>
-          <a href="profile" className="text-gray-300 hover:text-cyan-400 transition-colors">Profile</a>
-        </div>
-      </div>
-    </nav>
-  );
+          </svg>
+          <span className="text-xl font-bold text-white group-hover:text-cyan-300 transition-colors">
+            Virtual Coach
+          </span>
+        </a>
+        <div className="flex items-center gap-4">
+          <a href="/home" className="text-gray-300 hover:text-cyan-400 transition-colors">
+            Home
+          </a>
+          <a href="/dashboard" className="text-gray-300 hover:text-cyan-400 transition-colors">
+            Dashboard
+          </a>
+          <a href="/profile" className="text-gray-300 hover:text-cyan-400 transition-colors">
+            Profile
+          </a>
+        </div>
+      </div>
+    </nav>
+  );
 };
 
 
 const getChatResponse = async (history) => {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${import.meta.env.VITE_GEMINI_TEXT_MODEL}:generateContent?key=${apiKey}`;
+  if (Date.now() < rateLimitUntil) {
+    const waitSeconds = Math.ceil((rateLimitUntil - Date.now()) / 1000);
+    return `Rate limit reached. Please wait about ${waitSeconds}s and try again.`;
+  }
 
-  const systemInstruction = `You are a specialized health, fitness, and nutrition expert.
-Your goal is to provide accurate and helpful information.
-**Your HIGHEST PRIORITY is to provide answers in a list of bullet points.**
-**Use bullet points (- text) or numbered points (1. text) for ALL answers.**
-**Keep the points short and precise.**
+  const payload = { history };
 
-You can answer questions about:
-- Diseases and health conditions
-- Food, nutrition, and calories
-- Sports and fitness exercises
-- Creating diet plans and exercise routines
-
-**When a user asks for a plan (like a diet or exercise plan), ask only ONE follow-up question at a time.** For example, if they need a diet plan, first ask for their goals. After they answer, then ask for their BMI. Do not ask for all information at once.
-If you provide medical advice, include a brief disclaimer to consult a professional.`;
-
-  const contents = history.map(msg => ({
-    role: msg.sender === 'user' ? 'user' : 'model',
-    parts: [{ text: msg.text }]
-  }));
-
-  const payload = {
-    contents: contents,
-    systemInstruction: {
-      parts: [{ text: systemInstruction }]
-    },
-    tools: [
-      { "google_search": {} }
-    ],
-  };
-
-  let response;
   let retries = 0;
   const maxRetries = 5;
-  let delay = 1000; // 1 second
+  let delay = 1200;
 
   while (retries < maxRetries) {
     try {
-      response = await fetch(apiUrl, {
+      const response = await fetch(VIRTUAL_COACH_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -89,19 +87,49 @@ If you provide medical advice, include a brief disclaimer to consult a professio
 
       if (response.ok) {
         const result = await response.json();
-        const candidate = result.candidates?.[0];
-
-        if (candidate && candidate.content?.parts?.[0]?.text) {
-          return candidate.content.parts[0].text;
-        } else {
-          throw new Error("Invalid response structure from API");
+        const reply = (result.reply || '').trim();
+        if (reply) {
+          return reply;
         }
-      } else if (response.status === 429 || response.status >= 500) {
-        throw new Error(`API Error: ${response.status}`);
+        throw new Error("Invalid response structure from API");
+      } else if (response.status === 429) {
+        const retryAfterHeader = response.headers.get('retry-after');
+        const retryAfterMs = parseRetryAfterMs(retryAfterHeader);
+        const jitterMs = Math.floor(Math.random() * 300);
+        const waitMs = retryAfterMs ?? delay + jitterMs;
+
+        rateLimitUntil = Date.now() + waitMs;
+
+        if (retries === maxRetries - 1) {
+          return `Too many requests (429). Please retry in about ${Math.ceil(waitMs / 1000)}s.`;
+        }
+
+        await sleep(waitMs);
+        delay = Math.min(delay * 2, 15000);
+        retries++;
+        continue;
+      } else if (response.status === 401) {
+        const errorResult = await response.json().catch(() => ({}));
+        return `Error: ${errorResult.error || 'Unauthorized request. Check backend GROQ_API_KEY.'}`;
+      } else if (response.status === 400) {
+        const errorResult = await response.json().catch(() => ({}));
+        return `Error: ${errorResult.error || 'Invalid request sent to chatbot service.'}`;
+      } else if (response.status >= 500) {
+        const errorResult = await response.json().catch(() => ({}));
+        const serverMessage = errorResult.error || 'The AI service is temporarily unavailable. Please try again shortly.';
+
+        if (retries === maxRetries - 1) {
+          return `Error: ${serverMessage}`;
+        }
+        const jitterMs = Math.floor(Math.random() * 300);
+        await sleep(delay + jitterMs);
+        delay = Math.min(delay * 2, 15000);
+        retries++;
+        continue;
       } else {
-        const errorResult = await response.json();
+        const errorResult = await response.json().catch(() => ({}));
         console.error("API Error:", errorResult);
-        return `Error: ${errorResult.error?.message || 'Failed to get response.'}`;
+        return `Error: ${errorResult.error || 'Failed to get response.'}`;
       }
 
     } catch (error) {
@@ -109,8 +137,9 @@ If you provide medical advice, include a brief disclaimer to consult a professio
         console.error("Max retries reached. Error fetching chat response:", error);
         return "Sorry, I'm having trouble connecting. Please try again later.";
       }
-      await new Promise(resolve => setTimeout(resolve, delay));
-      delay *= 2; // Exponential backoff
+      const jitterMs = Math.floor(Math.random() * 300);
+      await sleep(delay + jitterMs);
+      delay = Math.min(delay * 2, 15000);
       retries++;
     }
   }
@@ -118,38 +147,131 @@ If you provide medical advice, include a brief disclaimer to consult a professio
   return "Sorry, I ran into an issue and couldn't get a response.";
 };
 
-/**
- * --- (NEW) Helper function to parse simple Markdown to HTML ---
- * This will format headings, bold text, and lists.
- */
-const parseMarkdownToHtml = (text) => {
-  if (!text) return '';
+const renderInlineBold = (text, keyPrefix) => {
+  const parts = [];
+  let lastIndex = 0;
+  const boldRegex = /\*\*(.*?)\*\*/g;
+  let match;
+  let segment = 0;
 
-  return text
-    .replace(/^###\s(.*$)/gim, '<h3 class="text-lg font-semibold mb-1">$1</h3>')
-    .replace(/^##\s(.*$)/gim, '<h2 class="text-xl font-semibold mb-2">$1</h2>')
-    .replace(/^#\s(.*$)/gim, '<h1 class="text-2xl font-bold mb-3">$1</h1>')
-    
-    .replace(/\*\*(.*?)\*\*/gim, '<strong class="font-semibold">$1</strong>')
-    
-    .replace(/^(?:\*|-\s)(.*$)/gim, '<li>$1</li>')
-    .replace(/<li>(.*?)<\/li>\s*(?=(?:<li>|<\/ul>|$))/gim, '<li>$1</li>')
-    .replace(/((<li>.*<\/li>\s*)+)/gim, '<ul class="list-disc list-inside ml-4 my-2">$1</ul>')
+  while ((match = boldRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(
+        <span key={`${keyPrefix}-t-${segment++}`}>
+          {text.slice(lastIndex, match.index)}
+        </span>
+      );
+    }
 
-    .replace(/^(\d+\.)\s(.*$)/gim, '<li>$2</li>') 
-    .replace(/((<li>.*<\/li>\s*)+)/gim, (match, p1) => {
-      if (match.includes('<ul')) return match; 
-      return `<ol class="list-decimal list-inside ml-4 my-2">${p1}</ol>`;
-    })
+    parts.push(
+      <strong key={`${keyPrefix}-b-${segment++}`} className="font-semibold">
+        {match[1]}
+      </strong>
+    );
 
-    .replace(/^(?!<h[1-3]>|<ul>|<ol>|<li>)(.*$)/gim, '<p class="mb-2">$1</p>')
-    .replace(/<\/p>\s*<p/g, '</p><p'); 
+    lastIndex = boldRegex.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(
+      <span key={`${keyPrefix}-t-${segment++}`}>
+        {text.slice(lastIndex)}
+      </span>
+    );
+  }
+
+  return parts.length ? parts : text;
+};
+
+const formatBotMessage = (text) => {
+  if (!text) return null;
+
+  const lines = text.split('\n');
+  const elements = [];
+  let listItems = [];
+  let listType = null;
+
+  const flushList = (baseKey) => {
+    if (!listItems.length) return;
+
+    if (listType === 'ol') {
+      elements.push(
+        <ol key={`${baseKey}-ol`} className="list-decimal list-inside ml-4 my-2 space-y-1">
+          {listItems.map((item, idx) => (
+            <li key={`${baseKey}-oli-${idx}`}>{renderInlineBold(item, `${baseKey}-oli-${idx}`)}</li>
+          ))}
+        </ol>
+      );
+    } else {
+      elements.push(
+        <ul key={`${baseKey}-ul`} className="list-disc list-inside ml-4 my-2 space-y-1">
+          {listItems.map((item, idx) => (
+            <li key={`${baseKey}-uli-${idx}`}>{renderInlineBold(item, `${baseKey}-uli-${idx}`)}</li>
+          ))}
+        </ul>
+      );
+    }
+
+    listItems = [];
+    listType = null;
+  };
+
+  lines.forEach((rawLine, index) => {
+    const line = rawLine.trim();
+
+    if (!line) {
+      flushList(`line-${index}`);
+      return;
+    }
+
+    const headingMatch = line.match(/^(#{1,3})\s+(.*)$/);
+    if (headingMatch) {
+      flushList(`line-${index}`);
+      const level = headingMatch[1].length;
+      const content = renderInlineBold(headingMatch[2], `h-${index}`);
+
+      if (level === 1) {
+        elements.push(<h1 key={`h1-${index}`} className="text-2xl font-bold">{content}</h1>);
+      } else if (level === 2) {
+        elements.push(<h2 key={`h2-${index}`} className="text-xl font-semibold">{content}</h2>);
+      } else {
+        elements.push(<h3 key={`h3-${index}`} className="text-lg font-semibold">{content}</h3>);
+      }
+      return;
+    }
+
+    const bulletMatch = line.match(/^[-*]\s+(.*)$/);
+    if (bulletMatch) {
+      if (listType && listType !== 'ul') flushList(`line-${index}`);
+      listType = 'ul';
+      listItems.push(bulletMatch[1]);
+      return;
+    }
+
+    const numberedMatch = line.match(/^\d+\.\s+(.*)$/);
+    if (numberedMatch) {
+      if (listType && listType !== 'ol') flushList(`line-${index}`);
+      listType = 'ol';
+      listItems.push(numberedMatch[1]);
+      return;
+    }
+
+    flushList(`line-${index}`);
+    elements.push(
+      <p key={`p-${index}`} className="mb-2">
+        {renderInlineBold(line, `p-${index}`)}
+      </p>
+    );
+  });
+
+  flushList('final');
+  return elements;
 };
 
 
 export default function FitnessChatbot() {
   const [chatHistory, setChatHistory] = useState([
-    { sender: 'bot', text: 'Welcome! I am your Health & Fitness AI Expert. Ask me about diet plans, exercises, or food calories!' }
+    { sender: 'bot', text: 'Welcome! I am your Health & Fitness AI Coach. Ask me about diet plans, exercises, or food calories!' }
   ]);
   const [userInput, setUserInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -194,9 +316,6 @@ export default function FitnessChatbot() {
    */
   const MessageBubble = ({ message }) => {
     const isBot = message.sender === 'bot';
-    const messageContent = isBot 
-      ? parseMarkdownToHtml(message.text) 
-      : message.text;
 
     return (
       <div className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'} mb-3`}>
@@ -206,12 +325,9 @@ export default function FitnessChatbot() {
             : 'bg-gray-200 text-gray-800 rounded-tl-none' 
         }`}>
           {isBot ? (
-            <div 
-              className="prose prose-sm max-w-none" 
-              dangerouslySetInnerHTML={{ __html: messageContent }} 
-            />
+            <div className="text-sm leading-6 space-y-1">{formatBotMessage(message.text)}</div>
           ) : (
-            messageContent
+            message.text
           )}
         </div>
       </div>
@@ -225,7 +341,7 @@ export default function FitnessChatbot() {
       <div className="flex flex-col max-w-4xl mx-auto h-[75vh] bg-slate-800 rounded-xl shadow-2xl border border-gray-700">
         
         <div className="flex-shrink-0 flex items-center justify-center p-4 bg-slate-900/50 text-white shadow-md rounded-t-lg border-b border-gray-700">
-          <h3 className="text-xl font-semibold">Health & Fitness AI Expert</h3>
+          <h3 className="text-xl font-semibold">Health & Fitness AI Coach</h3>
         </div>
 
         <div className="flex-1 p-4 overflow-y-auto space-y-2">

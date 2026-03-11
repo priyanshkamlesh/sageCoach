@@ -172,6 +172,9 @@ function Analysis() {
 
   // results
   const [result, setResult] = useState(null);
+  const [idealImageVisible, setIdealImageVisible] = useState(false);
+  const [idealImageSrc, setIdealImageSrc] = useState("");
+  const [idealImageLoading, setIdealImageLoading] = useState(false);
 
   // AI tips state
   const [aiTips, setAiTips] = useState("");
@@ -200,6 +203,9 @@ function Analysis() {
 
     setLoading(true);
     setResult(null);
+    setIdealImageVisible(false);
+    setIdealImageSrc("");
+    setIdealImageLoading(false);
     setError(null);
     setAiTips("");
     setTipsError("");
@@ -242,12 +248,15 @@ function Analysis() {
             : undefined),
         corrected_skeleton_image:
           data.corrected_skeleton_image ||
-          (data.annotated_image_base64
-            ? `data:image/jpeg;base64,${data.annotated_image_base64}`
+          (data.corrected_skeleton_image_base64
+            ? `data:image/jpeg;base64,${data.corrected_skeleton_image_base64}`
             : undefined),
       };
 
       setResult(normalized);
+      setIdealImageVisible(false);
+      setIdealImageSrc("");
+      setIdealImageLoading(false);
       setStep("results");
     } catch (err) {
       setError(
@@ -310,9 +319,24 @@ function Analysis() {
     setFile(null);
     setFileName("No file selected");
     setResult(null);
+    setIdealImageVisible(false);
+    setIdealImageSrc("");
+    setIdealImageLoading(false);
     setError(null);
     setAiTips("");
     setTipsError("");
+  };
+
+  const handleGenerateIdealImage = async () => {
+    if (!result?.corrected_skeleton_image) return;
+    setIdealImageLoading(true);
+
+    // Keep a small delay to show intent/progress in UI.
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    setIdealImageSrc(result.corrected_skeleton_image);
+    setIdealImageVisible(true);
+    setIdealImageLoading(false);
   };
 
   const saveScoreToDashboard = async () => {
@@ -484,6 +508,16 @@ function Analysis() {
                 <h3 className="text-xl font-semibold text-gray-300 mb-3">
                   Alignment Tips
                 </h3>
+                <div className="mb-4 flex flex-wrap gap-3 text-xs">
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-red-900/50 text-red-200 border border-red-500/50">
+                    <span className="w-2.5 h-2.5 rounded-full bg-red-500 mr-2" />
+                    Wrong End Point
+                  </span>
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-emerald-900/40 text-emerald-200 border border-emerald-500/50">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 mr-2" />
+                    Correct End Point
+                  </span>
+                </div>
                 {Array.isArray(result.feedback) &&
                 result.feedback.length > 0 ? (
                   <ul className="space-y-4">
@@ -580,17 +614,36 @@ function Analysis() {
 
               <div>
                 <h3 className="text-xl font-semibold text-gray-300 mb-3">
-                  Corrected Skeleton
+                  Ideal Posture Image
                 </h3>
                 <div className="border-2 border-gray-700 rounded-lg overflow-hidden shadow-lg bg-black">
-                  {result.corrected_skeleton_image && (
+                  {idealImageVisible && idealImageSrc && (
                     <img
-                      src={result.corrected_skeleton_image}
+                      src={idealImageSrc}
                       alt="Corrected pose skeleton"
                       className="w-full h-auto object-contain"
                     />
                   )}
+                  {!idealImageVisible && (
+                    <div className="h-full min-h-64 flex items-center justify-center text-gray-400 px-6 py-12 text-center">
+                      Click "Generate Ideal Image" to view your corrected posture.
+                    </div>
+                  )}
                 </div>
+                <button
+                  onClick={handleGenerateIdealImage}
+                  disabled={!result.corrected_skeleton_image || idealImageLoading}
+                  className="w-full flex items-center justify-center px-6 py-3 mt-4 bg-gradient-to-r from-emerald-500 to-green-600 text-white font-semibold rounded-lg shadow-lg hover:scale-105 hover:shadow-emerald-500/40 transform transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {idealImageLoading ? (
+                    <>
+                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                      Generating Ideal Image...
+                    </>
+                  ) : (
+                    "Generate Ideal Image"
+                  )}
+                </button>
               </div>
             </div>
 
