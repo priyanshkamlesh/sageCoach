@@ -269,7 +269,7 @@ function Analysis() {
     }
   };
 
-  // Generate AI tips via backend (Gemini on your Python side)
+  // Generate AI tips via backend (Groq on your Python side)
   const generateAiTips = async () => {
     if (!result) return;
     setTipsLoading(true);

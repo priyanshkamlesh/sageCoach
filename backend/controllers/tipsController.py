@@ -3,38 +3,30 @@ import json
 from flask import request, jsonify
 
 try:
-    import google.generativeai as genai
+    from openai import OpenAI
 except ImportError:
-    genai = None
+    OpenAI = None
 
 
-# Load API key from environment
-GEMINI_API_KEY = (
-    os.getenv("GEMINI_API_KEY")
-    or os.getenv("GOOGLE_API_KEY")
-    or os.getenv("API_KEY")
-)
-
-GEMINI_TEXT_MODEL = os.getenv("GEMINI_TEXT_MODEL", "gemini-1.5-flash")
-
-if genai is not None and GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+def _get_groq_config():
+    api_key = os.getenv("GROQ_API_KEY")
+    model_name = os.getenv("GROQ_TEXT_MODEL", "llama-3.1-8b-instant")
+    return api_key, model_name
 
 
 def api_generate_tips():
+    api_key, model_name = _get_groq_config()
 
-    if genai is None or not GEMINI_API_KEY:
-        return jsonify({
-            "error": "Gemini not configured. Set GEMINI_API_KEY in key.env"
-        }), 500
+    if OpenAI is None:
+        return jsonify({"error": "openai package is not installed on backend."}), 500
+
+    if not api_key:
+        return jsonify({"error": "Groq not configured. Set GROQ_API_KEY in backend/.env"}), 500
 
     data = request.get_json(silent=True) or {}
-
     activity = (data.get("activity") or "posture").strip()
-
     posture_data = data.get("posture_data") or {}
     score = posture_data.get("score")
-
     feedback_list = posture_data.get("feedback") or []
 
     if not isinstance(feedback_list, list):
@@ -56,28 +48,43 @@ Write practical improvement tips.
 Rules:
 - Address user as "you"
 - Start with short posture summary
-- Give 4–8 bullet points
+- Give 4-8 bullet points
 - Keep language simple
 - Use markdown
 """.strip()
 
     try:
+        client = OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=[
+                {"role": "system", "content": "You are a concise posture coach."},
+                {"role": "user", "content": prompt},
+            ],
+        )
 
-        model = genai.GenerativeModel(GEMINI_TEXT_MODEL)
-
-        response = model.generate_content(prompt)
-
-        tips = (response.text or "").strip()
+        tips = ""
+        if response.choices and response.choices[0].message:
+            content = response.choices[0].message.content
+            if isinstance(content, str):
+                tips = content.strip()
 
         if not tips:
-            return jsonify({"error": "Gemini returned empty response"}), 500
+            return jsonify({"error": "Groq returned empty response"}), 502
 
         return jsonify({"tips": tips}), 200
 
     except Exception as e:
+        message = str(e)
+        lowered = message.lower()
+        status_code = getattr(e, "status_code", None)
+        print("Groq tips error:", message)
 
-        print("Gemini error:", e)
+        if status_code == 429 or "429" in lowered or "rate limit" in lowered or "quota" in lowered:
+            return jsonify({"error": "Groq rate limit exceeded. Please retry shortly."}), 429
+        if status_code == 401:
+            return jsonify({"error": "Invalid GROQ_API_KEY."}), 401
+        if status_code == 400:
+            return jsonify({"error": f"Groq rejected request. Check model '{model_name}'."}), 400
 
-        return jsonify({
-            "error": "Failed to generate tips"
-        }), 500
+        return jsonify({"error": "Failed to generate tips"}), 500
