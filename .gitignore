@@ -18,3 +18,7 @@ build
 
 # OS files
 .DS_Store
+
+.env
+backend/.env
+frontend/.env
