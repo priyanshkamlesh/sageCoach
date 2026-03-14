@@ -1,0 +1,10 @@
+Flask
+flask-cors
+Werkzeug
+numpy
+opencv-python
+Pillow
+mediapipe
+google-generativeai
+openai
+firebase-admin
