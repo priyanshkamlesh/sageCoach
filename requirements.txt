@@ -7,3 +7,4 @@ Pillow
 mediapipe
 google-generativeai
 openai
+firebase-admin

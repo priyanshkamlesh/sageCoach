@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, Cake, Activity, ArrowRight, TrendingUp, Heart, CheckCircle, Play, X } from 'lucide-react';
+import { API_BASE_URL } from "../config";
 
 // --- Navbar (unchanged) ---
 const Navbar = () => {
@@ -175,33 +176,73 @@ function UserDetails() {
     setDetails(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const { name, height, weight, age, gender, purpose } = details;
-    if (name && height && weight && age && gender && purpose) {
+    const trimmedUsername = (username || "").trim();
+
+    if (name && trimmedUsername && height && weight && age && gender && purpose) {
       setError(null);
+      const email = getCurrentEmail();
+
+      if (!email) {
+        setError("User email not found. Please login again.");
+        return;
+      }
+
+      const payload = {
+        email,
+        profile: {
+          name: (name || "").trim(),
+          username: trimmedUsername,
+          height: Number(height),
+          weight: Number(weight),
+          age: Number(age),
+          gender,
+          purpose,
+          bmi: bmiResult.bmi ? Number(bmiResult.bmi) : null,
+        },
+      };
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/user/profile`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || "Failed to save profile in database.");
+        }
+      } catch (saveErr) {
+        setError(saveErr.message || "Unable to save profile. Please try again.");
+        return;
+      }
 
       // NEW: persist username alongside the profile for the current email (invisible to UI)
-      const email = getCurrentEmail();
       if (email) {
         try {
           const profiles = JSON.parse(localStorage.getItem("userProfile") || "{}");
           profiles[email] = {
             ...(profiles[email] || {}),
-            username: (username || "").trim(),
+            username: trimmedUsername,
             // keeping some useful basics if you want them in Profile later (optional)
             name: (name || "").trim(),
+            age: Number(age),
+            gender,
+            purpose,
             email,
           };
           localStorage.setItem("userProfile", JSON.stringify(profiles));
-          if (username) localStorage.setItem("userName", (username || "").trim());
+          localStorage.setItem("userName", trimmedUsername);
         } catch {}
       }
 
       // show first popup; after auto-close it will trigger the tutorial prompt
       setShowSuccess(true);
     } else {
-      setError("Please fill out all fields to proceed.");
+      setError("Please fill out all fields (including Username) to proceed.");
     }
   };
 

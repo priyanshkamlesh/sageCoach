@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 
 import { ThemeProvider } from "./theme/ThemeProvider";
 import ThemeToggleFab from "./components/ThemeToggleFab";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 import Home from './pages/Home';
 import Result from './pages/Result';
@@ -13,6 +14,7 @@ import Dashboard from './pages/Dashboard';
 import Profile from './pages/Profile'
 import Video from './pages/Video';
 import Virtual_coach from './pages/Virtual_coach';
+import LivePosture from "./pages/LivePosture";
 
 
 
@@ -21,17 +23,21 @@ export default function App() {
     <ThemeProvider>
       <Router>
         <Routes>
-        <Route path='/' element={<Result/>}/>
-          <Route path="/home" element={<Home />} />
-          <Route path="/analysis" element={<Analysis />} />
-          <Route path="/yoga" element={<Yoga />} />
-          <Route path="/video" element={<Video />} />
-          <Route path="/virtual_coach" element={<Virtual_coach />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/user_details" element={<User_details />} />
+          <Route path='/' element={<Result/>}/>
+          <Route path="/login" element={<Result />} />
           <Route path="/result" element={<Result />} />
-          <Route path="*" element={<Navigate to="/home" replace />} />
+
+          <Route path="/home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+          <Route path="/analysis" element={<ProtectedRoute><Analysis /></ProtectedRoute>} />
+          <Route path="/yoga" element={<ProtectedRoute><Yoga /></ProtectedRoute>} />
+          <Route path="/video" element={<ProtectedRoute><Video /></ProtectedRoute>} />
+          <Route path="/virtual_coach" element={<ProtectedRoute><Virtual_coach /></ProtectedRoute>} />
+          <Route path="/live-posture" element={<ProtectedRoute><LivePosture /></ProtectedRoute>} />
+          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+          <Route path="/user_details" element={<ProtectedRoute><User_details /></ProtectedRoute>} />
+
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
         <ThemeToggleFab />
       </Router>

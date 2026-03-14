@@ -1,5 +1,5 @@
 // src/pages/Login.jsx
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   signInWithEmailAndPassword,
@@ -7,8 +7,10 @@ import {
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
+  signOut,
 } from "firebase/auth";
 import { auth, googleProvider } from "./firebase.jsx";
+import { API_BASE_URL } from "../config";
 
 // ---------- LOCAL HELPERS ----------
 function setAuthToken(token) {
@@ -29,6 +31,14 @@ function setCurrentUserEmail(emailValue) {
 function ensureUserProfile(email) {
   try {
     localStorage.setItem("userProfile_exists_" + email, "1");
+  } catch {}
+}
+
+function clearClientSession() {
+  try {
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("userEmail");
+    localStorage.removeItem("currentUser");
   } catch {}
 }
 
@@ -56,6 +66,17 @@ export default function Login() {
     setInfoMsg("");
   };
 
+  const checkMongoUserExists = useCallback(async (emailValue) => {
+    const res = await fetch(`${API_BASE_URL}/api/user/exists`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: emailValue }),
+    });
+    if (!res.ok) return false;
+    const data = await res.json().catch(() => ({}));
+    return !!data.exists;
+  }, []);
+
   // ---------- Handle Google redirect result ----------
   useEffect(() => {
     (async () => {
@@ -68,6 +89,14 @@ export default function Login() {
 
           if (!isGmail(email)) {
             setErrorMsg("Only @gmail.com addresses are allowed.");
+            return;
+          }
+
+          const exists = await checkMongoUserExists(email);
+          if (!exists) {
+            await signOut(auth);
+            clearClientSession();
+            setErrorMsg("Invalid username.");
             return;
           }
 
@@ -85,7 +114,7 @@ export default function Login() {
         console.error("Google redirect result error:", err);
       }
     })();
-  }, [navigate]);
+  }, [navigate, checkMongoUserExists]);
 
   // ---------- REGISTER ----------
   const handleFirebaseRegister = async () => {
@@ -131,7 +160,10 @@ export default function Login() {
       let msg = err.message || "Registration failed.";
 
       if (err.code === "auth/email-already-in-use") {
-        msg = "This email is already registered. Try logging in instead.";
+        const existsInMongo = await checkMongoUserExists(clean);
+        msg = existsInMongo
+          ? "This email is already registered. Try logging in instead."
+          : "This email still exists in Firebase Auth. Login with existing password or reset password, then complete profile again.";
       } else if (err.code === "auth/invalid-email") {
         msg = "Please enter a valid email address.";
       } else if (err.code === "auth/weak-password") {
@@ -167,6 +199,13 @@ export default function Login() {
       const cred = await signInWithEmailAndPassword(auth, clean, pwd);
 
       const user = cred.user;
+      const exists = await checkMongoUserExists(clean);
+      if (!exists) {
+        await signOut(auth);
+        clearClientSession();
+        setErrorMsg("Invalid username.");
+        return;
+      }
       const token = await user.getIdToken();
 
       setAuthToken(token);
@@ -213,6 +252,14 @@ export default function Login() {
         return;
       }
 
+      const exists = await checkMongoUserExists(email);
+      if (!exists && modeLabel === "login") {
+        await signOut(auth);
+        clearClientSession();
+        setErrorMsg("Invalid username.");
+        return;
+      }
+
       const token = await user.getIdToken();
 
       setAuthToken(token);
@@ -223,7 +270,7 @@ export default function Login() {
         `${modeLabel === "login" ? "Login" : "Sign in"} with Google successful! Redirecting…`
       );
 
-      setTimeout(() => navigate("/home"), 800);
+      setTimeout(() => navigate(exists ? "/home" : "/user_details"), 800);
 
     } catch (err) {
       console.error("Google auth error:", err);

@@ -10,6 +10,7 @@ export default function AccountBanner({ compact = false }) {
   const location = useLocation();
   const [user, setUser] = useState(null);
   const [checking, setChecking] = useState(true);
+  const [showLogoutPopup, setShowLogoutPopup] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
@@ -38,6 +39,11 @@ export default function AccountBanner({ compact = false }) {
   };
 
   const handleLogout = async () => {
+    setShowLogoutPopup(true);
+
+    // Keep popup visible before auth state change unmounts protected UI.
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+
     try {
       await signOut(auth);
     } catch (e) {
@@ -50,9 +56,8 @@ export default function AccountBanner({ compact = false }) {
       localStorage.removeItem("currentUser");
     } catch {}
 
-    alert("You have been logged out. Please login again.");
-    // replace history entry so back button won't go back to protected page
-    navigate("/", { replace: true });
+    setShowLogoutPopup(false);
+    navigate("/login", { replace: true });
   };
 
   const isLoginPage = location.pathname === "/login";
@@ -82,46 +87,58 @@ export default function AccountBanner({ compact = false }) {
   const showLoginButton = !user || isLoginPage;
 
   return (
-    <div
-      className={`border border-slate-700 bg-slate-900/50 rounded-xl p-4 flex items-center justify-between shadow-lg ${
-        compact ? "text-sm" : "text-base"
-      }`}
-    >
-      <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-full bg-cyan-400 text-slate-900 font-bold flex items-center justify-center uppercase">
-          {user ? avatarChar : "?"}
+    <>
+      <div
+        className={`border border-slate-700 bg-slate-900/50 rounded-xl p-4 flex items-center justify-between shadow-lg ${
+          compact ? "text-sm" : "text-base"
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full bg-cyan-400 text-slate-900 font-bold flex items-center justify-center uppercase">
+            {user ? avatarChar : "?"}
+          </div>
+          <div>
+            <p className="font-semibold text-white">
+              {user ? user.email : "You are not logged in"}
+            </p>
+            <p className="text-xs text-gray-400">
+              {user
+                ? "Logged in via Firebase"
+                : "Login to save scores and track progress"}
+            </p>
+          </div>
         </div>
-        <div>
-          <p className="font-semibold text-white">
-            {user ? user.email : "You are not logged in"}
-          </p>
-          <p className="text-xs text-gray-400">
-            {user
-              ? "Logged in via Firebase"
-              : "Login to save scores and track progress"}
-          </p>
-        </div>
+
+        {showLogoutButton && (
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500 hover:bg-red-400 text-white text-sm transition"
+          >
+            <LogOut size={16} />
+            Logout
+          </button>
+        )}
+
+        {showLoginButton && (
+          <button
+            onClick={handleLogin}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-semibold text-sm transition"
+          >
+            <LogIn size={16} />
+            Login
+          </button>
+        )}
       </div>
 
-      {showLogoutButton && (
-        <button
-          onClick={handleLogout}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500 hover:bg-red-400 text-white text-sm transition"
-        >
-          <LogOut size={16} />
-          Logout
-        </button>
+      {showLogoutPopup && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center px-4">
+          <div className="bg-slate-800 border border-cyan-400 rounded-xl shadow-2xl px-6 py-5 text-center">
+            <p className="text-xl font-semibold text-white">
+              Redirecting to Login Page
+            </p>
+          </div>
+        </div>
       )}
-
-      {showLoginButton && (
-        <button
-          onClick={handleLogin}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-semibold text-sm transition"
-        >
-          <LogIn size={16} />
-          Login
-        </button>
-      )}
-    </div>
+    </>
   );
 }

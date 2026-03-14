@@ -11,12 +11,29 @@ import {
   Video,
   Lightbulb,
   Bot,
+  Check,
+  X,
 } from "lucide-react";
-import AccountBanner from "../components/AccountBanner";
 import { useAuthGuard } from "../hooks/useAuthguard";
 
 const API_BASE_URL =
   import.meta?.env?.VITE_API_BASE_URL || "http://localhost:5001";
+
+const JOINT_LABELS = {
+  nose: "Head",
+  l_sh: "Left shoulder",
+  r_sh: "Right shoulder",
+  l_elbow: "Left elbow",
+  r_elbow: "Right elbow",
+  l_wrist: "Left wrist",
+  r_wrist: "Right wrist",
+  l_hip: "Left hip",
+  r_hip: "Right hip",
+  l_knee: "Left knee",
+  r_knee: "Right knee",
+  l_ankle: "Left ankle",
+  r_ankle: "Right ankle",
+};
 
 // Extract a frame from a video for analysis
 const extractFrameFromVideo = (videoFile) => {
@@ -90,6 +107,18 @@ const Navbar = () => (
           className="text-gray-300 hover:text-cyan-400 transition-colors"
         >
           Home
+        </a>
+        <a
+          href="/analysis"
+          className="text-cyan-400 font-semibold border-b border-cyan-400"
+        >
+          Analysis
+        </a>
+        <a
+          href="/yoga"
+          className="text-gray-300 hover:text-cyan-400 transition-colors"
+        >
+          Yoga
         </a>
         <a
           href="/dashboard"
@@ -251,6 +280,10 @@ function Analysis() {
           (data.corrected_skeleton_image_base64
             ? `data:image/jpeg;base64,${data.corrected_skeleton_image_base64}`
             : undefined),
+        joint_status:
+          data.joint_status && typeof data.joint_status === "object"
+            ? data.joint_status
+            : {},
       };
 
       setResult(normalized);
@@ -361,15 +394,20 @@ function Analysis() {
     }
   };
 
+  const jointStatusEntries = Object.entries(result?.joint_status || {});
+  const incorrectJointEntries = jointStatusEntries.filter(
+    ([, status]) => status === "incorrect"
+  );
+  const correctJointEntries = jointStatusEntries.filter(
+    ([, status]) => status === "correct"
+  );
+  const canGenerateIdealImage = Boolean(result?.corrected_skeleton_image);
+
   return (
     <div className="min-h-screen bg-slate-900 text-gray-200 p-4 md:p-8 font-sans">
       <Navbar />
 
       <div className="max-w-6xl mx-auto">
-        <div className="mb-4">
-          <AccountBanner compact />
-        </div>
-
         {/* Step selection */}
         {step === "selection" && (
           <div className="bg-slate-800 p-6 rounded-xl shadow-2xl border border-gray-700 mb-6">
@@ -511,13 +549,57 @@ function Analysis() {
                 <div className="mb-4 flex flex-wrap gap-3 text-xs">
                   <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-red-900/50 text-red-200 border border-red-500/50">
                     <span className="w-2.5 h-2.5 rounded-full bg-red-500 mr-2" />
-                    Wrong End Point
+                    Incorrect posture point
                   </span>
                   <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-emerald-900/40 text-emerald-200 border border-emerald-500/50">
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 mr-2" />
-                    Correct End Point
+                    Correct posture point
                   </span>
                 </div>
+                {!!jointStatusEntries.length && (
+                  <div className="mb-4 grid grid-cols-2 gap-3">
+                    <div className="rounded-lg border border-red-500/40 bg-red-950/40 px-4 py-3">
+                      <div className="text-xs uppercase tracking-wide text-red-300">
+                        Needs correction
+                      </div>
+                      <div className="mt-1 text-2xl font-bold text-white">
+                        {incorrectJointEntries.length}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-emerald-500/40 bg-emerald-950/30 px-4 py-3">
+                      <div className="text-xs uppercase tracking-wide text-emerald-300">
+                        Already aligned
+                      </div>
+                      <div className="mt-1 text-2xl font-bold text-white">
+                        {correctJointEntries.length}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {!!jointStatusEntries.length && (
+                  <div className="mb-6 flex flex-wrap gap-2">
+                    {jointStatusEntries.map(([joint, status]) => {
+                      const isIncorrect = status === "incorrect";
+                      return (
+                        <span
+                          key={joint}
+                          className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs ${
+                            isIncorrect
+                              ? "border-red-500/50 bg-red-900/40 text-red-100"
+                              : "border-emerald-500/50 bg-emerald-900/30 text-emerald-100"
+                          }`}
+                        >
+                          {isIncorrect ? (
+                            <X className="h-3.5 w-3.5" />
+                          ) : (
+                            <Check className="h-3.5 w-3.5" />
+                          )}
+                          {JOINT_LABELS[joint] || joint}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
                 {Array.isArray(result.feedback) &&
                 result.feedback.length > 0 ? (
                   <ul className="space-y-4">
@@ -610,6 +692,10 @@ function Analysis() {
                     />
                   )}
                 </div>
+                <p className="mt-3 text-sm text-gray-400">
+                  Red points and lines show misaligned areas. Green points and
+                  lines show the joints already in the right position.
+                </p>
               </div>
 
               <div>
@@ -626,13 +712,18 @@ function Analysis() {
                   )}
                   {!idealImageVisible && (
                     <div className="h-full min-h-64 flex items-center justify-center text-gray-400 px-6 py-12 text-center">
-                      Click "Generate Ideal Image" to view your corrected posture.
+                      Generate the target posture image to compare your current
+                      alignment against the corrected pose.
                     </div>
                   )}
                 </div>
+                <p className="mt-3 text-sm text-gray-400">
+                  This ideal image shows the corrected head, shoulder, and hip
+                  alignment you should compare against.
+                </p>
                 <button
                   onClick={handleGenerateIdealImage}
-                  disabled={!result.corrected_skeleton_image || idealImageLoading}
+                  disabled={!canGenerateIdealImage || idealImageLoading}
                   className="w-full flex items-center justify-center px-6 py-3 mt-4 bg-gradient-to-r from-emerald-500 to-green-600 text-white font-semibold rounded-lg shadow-lg hover:scale-105 hover:shadow-emerald-500/40 transform transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {idealImageLoading ? (

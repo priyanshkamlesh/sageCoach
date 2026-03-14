@@ -44,4 +44,19 @@ html, body, #root {
   transition: background-color .25s ease, color .25s ease;
 }
 
+/* Light-mode overrides for existing Tailwind-heavy pages */
+.light-theme .bg-slate-900 { background-color: #f8fafc !important; }
+.light-theme .bg-slate-800 { background-color: #ffffff !important; }
+.light-theme .bg-slate-700 { background-color: #f1f5f9 !important; }
+.light-theme .border-gray-700 { border-color: #cbd5e1 !important; }
+.light-theme .border-gray-600 { border-color: #d1d5db !important; }
+.light-theme .text-gray-200 { color: #1f2937 !important; }
+.light-theme .text-gray-300 { color: #374151 !important; }
+.light-theme .text-gray-400 { color: #4b5563 !important; }
+.light-theme .text-white { color: #0f172a !important; }
+.light-theme .bg-black\/65 { background-color: rgba(255,255,255,.7) !important; }
+
+/* Keep important CTA text white on gradients */
+.light-theme .bg-gradient-to-r .text-white { color: #ffffff !important; }
+
 @import "tailwindcss"

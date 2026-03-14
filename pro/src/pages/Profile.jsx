@@ -1,9 +1,18 @@
-// src/pages/Profile.jsx
+﻿// src/pages/Profile.jsx
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ThemeToggleInline from "../components/ThemeToggleInline.jsx";
 import AccountBanner from "../components/AccountBanner";
 import { useAuthGuard } from "../hooks/useAuthguard.js"; // make sure file name matches
+import {
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updateEmail as firebaseUpdateEmail,
+  updatePassword as firebaseUpdatePassword,
+  deleteUser as firebaseDeleteUser,
+} from "firebase/auth";
+import { auth } from "./firebase.jsx";
+import { API_BASE_URL } from "../config";
 
 import {
   User,
@@ -14,7 +23,6 @@ import {
   Edit,
   Save,
   XCircle,
-  LogOut,
   Eye,
   EyeOff,
   Key,
@@ -141,7 +149,7 @@ const ProfileField = ({
         )
       ) : (
         <p className="w-full px-4 py-3 bg-slate-800 rounded-lg text-gray-200">
-          {type === "password" ? "••••••••" : value || "-"}
+          {type === "password" ? "â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" : value || "-"}
         </p>
       )}
     </div>
@@ -190,7 +198,7 @@ const PassInput = ({
 
 // ---------- Main Profile component ----------
 export default function Profile() {
-  useAuthGuard(); // 🔒 guard this page
+  useAuthGuard(); // ðŸ”’ guard this page
 
   const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
@@ -211,6 +219,7 @@ export default function Profile() {
   const [showNew, setShowNew] = useState(false);
   const [showConf, setShowConf] = useState(false);
   const [showSavedPassword, setShowSavedPassword] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   const [creds, setCreds] = useState({
     email: "",
@@ -220,48 +229,88 @@ export default function Profile() {
 
   // Load profile on mount
   useEffect(() => {
-    let session = getCurrentUser();
+    (async () => {
+      let session = getCurrentUser();
 
-    if (!session || !session.email) {
-      const c = getCredentials();
-      if (c?.email) {
-        session = { email: c.email };
-        setCurrentUser(c.email);
+      if (!session || !session.email) {
+        const c = getCredentials();
+        if (c?.email) {
+          session = { email: c.email };
+          setCurrentUser(c.email);
+        }
       }
-    }
 
-    if (!session || !session.email) {
-      const storedEmail = localStorage.getItem("userEmail");
-      if (storedEmail) {
-        session = { email: storedEmail };
-        setCurrentUser(storedEmail);
+      if (!session || !session.email) {
+        const storedEmail = localStorage.getItem("userEmail");
+        if (storedEmail) {
+          session = { email: storedEmail };
+          setCurrentUser(storedEmail);
+        }
       }
-    }
 
-    if (!session || !session.email) {
-      return;
-    }
+      if (!session || !session.email) {
+        return;
+      }
 
-    const email = session.email;
-    const profiles = getProfiles();
+      const email = session.email;
+      const lowerEmail = String(email).toLowerCase();
+      const profiles = getProfiles();
 
-    if (!profiles[email]) {
-      profiles[email] = {
+      if (!profiles[email] && !profiles[lowerEmail]) {
+        profiles[lowerEmail] = {
+          username: "",
+          email: lowerEmail,
+          age: 20,
+          gender: "Male",
+        };
+        saveProfiles(profiles);
+      }
+
+      let merged = profiles[email] || profiles[lowerEmail] || {
         username: "",
-        email,
-        age: 20,
+        email: lowerEmail,
+        age: "",
         gender: "Male",
       };
-      saveProfiles(profiles);
-    }
+      try {
+        const res = await fetch(
+          `${API_BASE_URL}/api/user/profile?email=${encodeURIComponent(email)}`
+        );
+        const data = await res.json();
+        if (res.ok && data?.exists && data?.profile) {
+          const p = data.profile;
+          const nested = p.profile || {};
+          const rawGender = p.gender || nested.gender || merged.gender || "Male";
+          const normGender = (() => {
+            const g = String(rawGender).trim().toLowerCase();
+            if (g === "male") return "Male";
+            if (g === "female") return "Female";
+            if (g === "other") return "Other";
+            if (g === "prefer_not_to_say" || g === "prefer not to say") return "Prefer not to say";
+            return "Male";
+          })();
+          merged = {
+            ...merged,
+            username: p.username || nested.username || merged.username || "",
+            email: p.email || merged.email || lowerEmail,
+            age: p.age ?? nested.age ?? merged.age ?? "",
+            gender: normGender,
+          };
+          profiles[lowerEmail] = merged;
+          saveProfiles(profiles);
+        }
+      } catch (err) {
+        console.error("Profile sync fetch failed:", err);
+      }
 
-    setFormData(profiles[email]);
-    setOriginalData(profiles[email]);
+      setFormData(merged);
+      setOriginalData(merged);
 
-    const c = getCredentials();
-    setCreds(
-      c?.email === email ? c : { email, password: null, provider: "local" }
-    );
+      const c = getCredentials();
+      setCreds(
+        c?.email === email ? c : { email: lowerEmail, password: null, provider: "local" }
+      );
+    })();
   }, []);
 
   const handleChange = (e) => {
@@ -281,16 +330,37 @@ export default function Profile() {
     setIsEditing(!isEditing);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const profiles = getProfiles();
-    if (originalData.email && originalData.email !== formData.email) {
-      delete profiles[originalData.email];
+    const currentFirebaseUser = auth.currentUser;
+    const oldEmail = originalData.email;
+    const newEmail = formData.email;
+
+    if (currentFirebaseUser && oldEmail && newEmail && oldEmail !== newEmail) {
+      try {
+        await firebaseUpdateEmail(currentFirebaseUser, newEmail);
+      } catch (err) {
+        console.error("Firebase email update failed:", err);
+        if (err?.code === "auth/requires-recent-login") {
+          alert("For security, please logout and login again before changing email.");
+        } else {
+          alert("Unable to update email in Firebase.");
+        }
+        return;
+      }
     }
-    profiles[formData.email] = {
+
+    const profiles = getProfiles();
+    const newKey = String(formData.email || "").toLowerCase();
+    const oldKey = String(originalData.email || "").toLowerCase();
+    if (oldKey && oldKey !== newKey) {
+      delete profiles[originalData.email];
+      delete profiles[oldKey];
+    }
+    profiles[newKey] = {
       username: formData.username || "",
-      email: formData.email,
+      email: newKey,
       age: Number(formData.age) || "",
       gender: formData.gender || "Male",
     };
@@ -298,14 +368,14 @@ export default function Profile() {
 
     const currentCreds = getCredentials();
     if (currentCreds?.email && currentCreds.email !== formData.email) {
-      setCredentials({ ...currentCreds, email: formData.email });
-      setCreds({ ...currentCreds, email: formData.email });
-      setCurrentUser(formData.email);
-      localStorage.setItem("userEmail", formData.email);
+      setCredentials({ ...currentCreds, email: newKey });
+      setCreds({ ...currentCreds, email: newKey });
+      setCurrentUser(newKey);
+      localStorage.setItem("userEmail", newKey);
     }
 
-    setOriginalData(profiles[formData.email]);
-    setFormData(profiles[formData.email]);
+    setOriginalData(profiles[newKey]);
+    setFormData(profiles[newKey]);
     setIsEditing(false);
   };
 
@@ -338,7 +408,7 @@ export default function Profile() {
     setShowConf(false);
   };
 
-  const handlePasswordSave = () => {
+  const handlePasswordSave = async () => {
     const currentCreds = getCredentials();
     const email = formData.email || currentCreds.email;
 
@@ -347,15 +417,30 @@ export default function Profile() {
       return;
     }
 
-    const isGoogleOnly =
-      !currentCreds?.password && currentCreds?.provider === "google";
+    const firebaseUser = auth.currentUser;
+    if (!firebaseUser || !firebaseUser.email) {
+      alert("No active Firebase session found. Please login again.");
+      return;
+    }
 
-    if (!isGoogleOnly && currentCreds?.password) {
+    const isGoogleOnly = (firebaseUser.providerData || []).some(
+      (p) => p.providerId === "google.com"
+    );
+
+    if (!isGoogleOnly) {
       if (!currentPassword) {
         alert("Please enter your current password.");
         return;
       }
-      if (currentPassword !== currentCreds.password) {
+
+      try {
+        const credential = EmailAuthProvider.credential(
+          firebaseUser.email,
+          currentPassword
+        );
+        await reauthenticateWithCredential(firebaseUser, credential);
+      } catch (reauthErr) {
+        console.error("Re-auth failed:", reauthErr);
         alert("Current password is incorrect.");
         return;
       }
@@ -370,16 +455,80 @@ export default function Profile() {
       return;
     }
 
-    const updated = { email, password: newPassword, provider: "local" };
-    setCredentials(updated);
-    setCreds(updated);
-    setCurrentUser(email);
-    localStorage.setItem("userEmail", email);
+    try {
+      await firebaseUpdatePassword(firebaseUser, newPassword);
 
-    alert("✅ Password updated successfully.");
-    cancelPasswordChange();
+      const updated = { email, password: newPassword, provider: "local" };
+      setCredentials(updated);
+      setCreds(updated);
+      setCurrentUser(email);
+      localStorage.setItem("userEmail", email);
+
+      alert("Password updated successfully.");
+      cancelPasswordChange();
+    } catch (err) {
+      console.error("Firebase password update failed:", err);
+      if (err?.code === "auth/requires-recent-login") {
+        alert("For security, please logout and login again, then try again.");
+      } else {
+        alert("Unable to update password in Firebase.");
+      }
+    }
   };
 
+  const handleDeleteAccount = async () => {
+    const firebaseUser = auth.currentUser;
+    const emailToDelete = (firebaseUser?.email || formData.email || "").trim().toLowerCase();
+
+    if (!emailToDelete) {
+      alert("No account found to delete.");
+      return;
+    }
+    if (!firebaseUser) {
+      alert("No active session found. Please login again.");
+      return;
+    }
+
+    const confirmDelete = window.confirm(
+      "Delete your account permanently? This will remove your login and saved data."
+    );
+    if (!confirmDelete) return;
+
+    setDeletingAccount(true);
+    try {
+      await firebaseDeleteUser(firebaseUser);
+
+      await fetch(`${API_BASE_URL}/api/user/delete-account`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailToDelete }),
+      });
+
+      try {
+        const profiles = getProfiles();
+        delete profiles[emailToDelete];
+        saveProfiles(profiles);
+      } catch {}
+
+      clearCurrentUser();
+      localStorage.removeItem("userEmail");
+      localStorage.removeItem("authToken");
+      localStorage.removeItem("userCredentials");
+      localStorage.removeItem("userName");
+
+      alert("Account deleted successfully.");
+      navigate("/login", { replace: true });
+    } catch (err) {
+      console.error("Delete account failed:", err);
+      if (err?.code === "auth/requires-recent-login") {
+        alert("For security, please logout and login again, then delete your account.");
+      } else {
+        alert("Unable to delete account right now. Please try again.");
+      }
+    } finally {
+      setDeletingAccount(false);
+    }
+  };
   const savedPassword = creds?.password ?? "";
   const isGoogleOnly = !creds?.password && creds?.provider === "google";
 
@@ -460,9 +609,13 @@ export default function Profile() {
 
             <div className="flex items-center gap-2">
               <p className="w-full px-4 py-3 bg-slate-800 rounded-lg text-gray-200">
-                {savedPassword && showSavedPassword
-                  ? savedPassword
-                  : "••".repeat(Math.max(savedPassword?.length || 8, 8))}
+                {savedPassword
+                  ? showSavedPassword
+                    ? savedPassword
+                    : "••".repeat(Math.max(savedPassword.length || 8, 8))
+                  : showSavedPassword
+                    ? "Password cannot be retrieved from Firebase for security."
+                    : "••••••••"}
               </p>
               <button
                 type="button"
@@ -538,8 +691,8 @@ export default function Profile() {
 
             {isGoogleOnly && showPasswordSection && (
               <p className="text-xs text-gray-400">
-                This account was created with Google. You don’t need your
-                current password — set a new one here to enable email/password
+                This account was created with Google. You donâ€™t need your
+                current password â€” set a new one here to enable email/password
                 sign-in too.
               </p>
             )}
@@ -569,8 +722,23 @@ export default function Profile() {
           <div style={{ marginTop: 12 }}>
             <ThemeToggleInline />
           </div>
+
+          <div className="mt-6 pt-4 border-t border-red-900/60">
+            <button
+              type="button"
+              onClick={handleDeleteAccount}
+              disabled={deletingAccount}
+              className="w-full md:w-auto px-5 py-2 bg-red-700 text-white font-semibold rounded-lg hover:bg-red-600 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {deletingAccount ? "Deleting Account..." : "Delete Account"}
+            </button>
+          </div>
         </form>
       </div>
     </div>
   );
 }
+
+
+
+

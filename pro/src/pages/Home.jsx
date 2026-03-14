@@ -6,12 +6,15 @@ import {
   Sprout,
   Youtube,
   Bot,
+  UserCircle2,
   LayoutDashboard,
   ArrowRight,
   X,
   ChevronRight,
+  Camera,
 } from "lucide-react";
 import { useAuthGuard } from "../hooks/useAuthguard";
+import { useTheme } from "../theme/ThemeProvider";
 
 // --- Helper: read ?tutorial=1 from URL ---
 function useQuery() {
@@ -30,26 +33,32 @@ const OptionCard = ({
   delay,
   actionText,
   onClick,
+  dark,
 }) => {
   return (
     <Link
       id={id}
       to={to}
       onClick={onClick}
-      className={`group bg-slate-800 p-6 rounded-xl shadow-lg border border-gray-700 
+      className={`group p-6 rounded-xl shadow-lg border 
                   transform transition-all duration-300 hover:scale-105 hover:shadow-2xl 
-                  hover:${hoverColor} cursor-pointer animate-fadeIn flex flex-col justify-between relative`}
+                  hover:${hoverColor} cursor-pointer animate-fadeIn flex flex-col justify-between relative ${
+                    dark
+                      ? "bg-slate-800 border-gray-700"
+                      : "bg-white border-slate-200"
+                  }`}
       style={{ animationDelay: `${delay}ms` }}
     >
       <div>
         <div
-          className="flex items-center justify-center w-16 h-16 bg-slate-700 rounded-lg mb-4 
-                        group-hover:bg-opacity-50 transition-all duration-300"
+          className={`flex items-center justify-center w-16 h-16 rounded-lg mb-4 
+                        group-hover:bg-opacity-50 transition-all duration-300
+                        ${dark ? "bg-slate-700" : "bg-slate-100"}`}
         >
           {icon}
         </div>
-        <h3 className="text-2xl font-bold text-white mb-2">{title}</h3>
-        <p className="text-gray-400 mb-4">{description}</p>
+        <h3 className={`text-2xl font-bold mb-2 ${dark ? "text-white" : "text-slate-800"}`}>{title}</h3>
+        <p className={`mb-4 ${dark ? "text-gray-400" : "text-slate-500"}`}>{description}</p>
       </div>
       <span className="font-semibold text-cyan-400 group-hover:underline flex items-center mt-2">
         {actionText}
@@ -165,7 +174,9 @@ const GuidedTour = ({ steps, onClose }) => {
 
 // --- Main Home Page Component ---
 function HomePage() {
-  useAuthGuard(); // 🔒 protect home
+  useAuthGuard();
+  const { theme } = useTheme();
+  const dark = theme === "dark";
 
   const query = useQuery();
   const [showTour, setShowTour] = useState(false);
@@ -190,6 +201,11 @@ function HomePage() {
         text: "Ask your Queries.",
       },
       {
+        targetId: "card-live-posture",
+        title: "Live Posture",
+        text: "Use your webcam for real-time activity tracking.",
+      },
+      {
         targetId: "btn-dashboard",
         title: "Dashboard",
         text: "Your personal hub for progress and insights.",
@@ -210,23 +226,40 @@ function HomePage() {
   }, [query]);
 
   return (
-    <div className="min-h-screen bg-slate-900 text-gray-200 p-4 md:p-8 font-sans">
-      <div className="max-w-6xl mx-auto">
+    <div
+      className={`min-h-screen p-4 md:p-8 font-sans transition-colors duration-300 ${
+        dark ? "bg-slate-900 text-gray-200" : "bg-slate-100 text-slate-800"
+      }`}
+    >
+      <div className="max-w-7xl mx-auto">
+        <div className="flex justify-end mb-4">
+          <Link
+            to="/profile"
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg border shadow-sm transition ${
+              dark
+                ? "bg-slate-800 border-slate-700 text-gray-100 hover:bg-slate-700"
+                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+            }`}
+          >
+            <UserCircle2 className="w-4 h-4" />
+            Profile
+          </Link>
+        </div>
         {/* Header */}
         <header
-          className="mb-12 mt-8 text-center animate-fadeIn"
+          className="mb-14 mt-8 text-center animate-fadeIn"
           style={{ animationDelay: "100ms" }}
         >
           <h1 className="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-600 mb-2 [text-shadow:_0_2px_4px_rgb(0_0_0_/_25%)]">
             What's Your Quest Today?
           </h1>
-          <p className="text-2xl text-gray-400">
+          <p className={`text-2xl ${dark ? "text-gray-400" : "text-slate-500"}`}>
             Choose a path to begin your journey.
           </p>
         </header>
 
         {/* Options Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16 relative">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 mb-20 relative">
           <OptionCard
             id="card-govt"
             icon={<Briefcase className="w-8 h-8 text-blue-400" />}
@@ -236,6 +269,7 @@ function HomePage() {
             to="/analysis"
             delay={200}
             actionText="Fix My Study Stance"
+            dark={dark}
             onClick={() => {
               if (localStorage.getItem("homeTourCompleted") === "1") {
                 localStorage.setItem("nextPageTour", "analysis");
@@ -251,6 +285,7 @@ function HomePage() {
             to="/yoga"
             delay={300}
             actionText="Begin My Flow"
+            dark={dark}
             onClick={() => {
               if (localStorage.getItem("homeTourCompleted") === "1") {
                 localStorage.setItem("nextPageTour", "yoga");
@@ -266,6 +301,7 @@ function HomePage() {
             to="/video"
             delay={400}
             actionText="Analyze My Video"
+            dark={dark}
             onClick={() => {
               if (localStorage.getItem("homeTourCompleted") === "1") {
                 localStorage.setItem("nextPageTour", "video");
@@ -281,9 +317,26 @@ function HomePage() {
             to="/virtual_coach"
             delay={500}
             actionText="Get Instant Advice"
+            dark={dark}
             onClick={() => {
               if (localStorage.getItem("homeTourCompleted") === "1") {
                 localStorage.setItem("nextPageTour", "virtual_coach");
+              }
+            }}
+          />
+          <OptionCard
+            id="card-live-posture"
+            icon={<Camera className="w-8 h-8 text-amber-400" />}
+            title="Live Posture"
+            description="Track exercise live on webcam and get mistakes when you stop."
+            hoverColor="border-amber-500"
+            to="/live-posture"
+            delay={550}
+            actionText="Start Live Detection"
+            dark={dark}
+            onClick={() => {
+              if (localStorage.getItem("homeTourCompleted") === "1") {
+                localStorage.setItem("nextPageTour", "live-posture");
               }
             }}
           />
@@ -294,7 +347,7 @@ function HomePage() {
           className="text-center mb-12 animate-fadeIn"
           style={{ animationDelay: "600ms" }}
         >
-          <p className="text-3xl font-light italic text-gray-400">
+          <p className={`text-3xl font-light italic ${dark ? "text-gray-400" : "text-slate-500"}`}>
             "The journey of a thousand miles begins with a single step."
           </p>
         </div>
@@ -335,3 +388,4 @@ function HomePage() {
 }
 
 export default HomePage;
+
